@@ -1,0 +1,3 @@
+# Keep named profile runs (e.g. baseline_porazhay/), gitignore raw mock-vlm
+# timelines that docker-compose drops at the root of profiles/.
+mock_vlm_timeline.jsonl

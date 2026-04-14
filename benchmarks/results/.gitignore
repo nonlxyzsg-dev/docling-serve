@@ -1,0 +1,6 @@
+# Track only the named baseline + explicitly labeled runs. Ad-hoc timestamped
+# runs stay out of git to avoid bloating history.
+*.json
+!baseline.json
+!after_task_03.json
+!after_task_06.json

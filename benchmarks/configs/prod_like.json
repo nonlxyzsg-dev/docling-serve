@@ -1,0 +1,44 @@
+{
+  "_comment": "Production-like conversion config for docling-serve. Mirrors what docling-proxy injects for a text-PDF VLM route (main.py build_picture_description_api). Fields that come from environment (URL, API key) are placeholders — run.py overrides them before each request.",
+
+  "docling_version": "2.88.0",
+  "docling_serve_version": "1.16.1+683eeca",
+
+  "docling_serve_env": {
+    "UVICORN_WORKERS": "2",
+    "DOCLING_SERVE_ENG_LOC_NUM_WORKERS": "2"
+  },
+
+  "request_form": {
+    "from_formats": ["pdf", "docx"],
+    "to_formats": ["md"],
+    "do_ocr": "false",
+    "image_export_mode": "placeholder",
+    "pipeline": "standard",
+    "do_picture_description": "true",
+    "do_picture_description_custom": "false",
+    "do_picture_classification": "false",
+    "return_as_file": "false"
+  },
+
+  "picture_description_api": {
+    "url": "http://mock-vlm:4000/v1/chat/completions",
+    "headers": {
+      "Authorization": "Bearer mock"
+    },
+    "params": {
+      "model": "mock-vlm",
+      "chat_template_kwargs": {"enable_thinking": false}
+    },
+    "timeout": 300,
+    "concurrency": 8,
+    "prompt": "Describe this image in detail.\n/no_think"
+  },
+
+  "notes": [
+    "concurrency=8 matches the value proxy injects per request (DEFAULT_VLM_CONCURRENCY in docling-proxy/main.py).",
+    "picture_description_custom_config is intentionally NOT used here — proxy always switches to picture_description_api because custom_config does not respect concurrency (known bug #4 in TASK_01 report).",
+    "image_export_mode=placeholder avoids the Pillow 'tile cannot extend outside image' crash on VLM pipeline (known bug #2 in TASK_01 report).",
+    "For this baseline we use 'standard' pipeline + picture_description_api — that is what the proxy uses for text PDFs. VLM full-page pipeline is a separate route handled by build_vlm_pipeline_model_api, not measured in TASK_02 baseline."
+  ]
+}

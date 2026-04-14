@@ -1,0 +1,65 @@
+# Local stack for benchmark runs: docling-serve + mock VLM.
+#
+# Usage:
+#   docker compose up -d
+#   curl http://localhost:5001/health
+#   curl http://localhost:4000/health
+#   python run.py --endpoint http://localhost:5001/v1/convert/file \
+#                 --mock-vlm-timeline http://localhost:4000/timeline \
+#                 --config configs/prod_like.json \
+#                 --fixtures fixtures/ \
+#                 --output results/baseline.json --label baseline
+#
+# Notes:
+# - docling-serve image is pinned via ${DOCLING_SERVE_IMAGE}. The default is
+#   the upstream main tag, matching the current production image. Override to
+#   test specific commits/tags.
+# - UVICORN_WORKERS / LOC_NUM_WORKERS mirror the production configuration.
+# - SYS_PTRACE is added to allow py-spy profiling of the worker from inside
+#   the container (see benchmarks/README.md).
+# - Mock VLM writes its timeline to ./profiles/mock_vlm_timeline.jsonl via a
+#   bind mount; run.py reads it back through the HTTP /timeline endpoint.
+
+services:
+  docling-serve:
+    image: ${DOCLING_SERVE_IMAGE:-ghcr.io/docling-project/docling-serve:main}
+    container_name: bench-docling-serve
+    environment:
+      UVICORN_WORKERS: "2"
+      DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "2"
+      # Allow picture description API requests to mock-vlm over the compose
+      # network. The actual URL is passed per-request by run.py; nothing here
+      # needs to know about the backend.
+      DOCLING_SERVE_ENG_KIND: "local"
+    ports:
+      - "5001:5001"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    depends_on:
+      - mock-vlm
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mock-vlm:
+    build:
+      context: ./mock_vlm_server
+    container_name: bench-mock-vlm
+    environment:
+      MOCK_VLM_LATENCY_MEAN_S: "${MOCK_VLM_LATENCY_MEAN_S:-5.0}"
+      MOCK_VLM_LATENCY_STDDEV_S: "${MOCK_VLM_LATENCY_STDDEV_S:-2.0}"
+      MOCK_VLM_LATENCY_MIN_S: "${MOCK_VLM_LATENCY_MIN_S:-0.5}"
+      MOCK_VLM_TIMELINE_PATH: "/data/mock_vlm_timeline.jsonl"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./profiles:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
